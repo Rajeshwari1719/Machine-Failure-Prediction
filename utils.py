@@ -1,30 +1,38 @@
 import requests
 import pandas as pd
 
-THINGSPEAK_CHANNEL_ID = "YOUR_CHANNEL_ID"
-THINGSPEAK_API_KEY = "YOUR_READ_API_KEY"
+CHANNEL_ID = "3225416"
+READ_API_KEY = "HAQ25PJNNX3R0JCR"
 
-def fetch_realtime_data(results=100):
-    url = f"https://api.thingspeak.com/channels/{THINGSPEAK_CHANNEL_ID}/feeds.json"
-    params = {
-        "api_key": THINGSPEAK_API_KEY,
-        "results": results
-    }
+def fetch_realtime_data(field_num=1, results=200):
+    url = (
+        f"https://api.thingspeak.com/channels/{CHANNEL_ID}/fields/"
+        f"{field_num}.json?api_key={READ_API_KEY}&results={results}"
+    )
 
-    response = requests.get(url)
-    data = response.json()["feeds"]
+    try:
+        response = requests.get(url, timeout=5)
 
-    df = pd.DataFrame(data)
+        if response.status_code != 200:
+            return pd.DataFrame()
 
-    # Rename according to your fields
-    df = df.rename(columns={
-        "field1": "temperature",
-        "field2": "vibration",
-        "field3": "current"
-    })
+        json_data = response.json()
 
-    df["temperature"] = pd.to_numeric(df["temperature"], errors="coerce")
-    df["vibration"] = pd.to_numeric(df["vibration"], errors="coerce")
-    df["current"] = pd.to_numeric(df["current"], errors="coerce")
+        # ✅ SAFE CHECK (NO KeyError possible)
+        feeds = json_data.get("feeds", [])
+        if not feeds:
+            return pd.DataFrame()
 
-    return df.dropna()
+        rows = []
+        for item in feeds:
+            value = item.get(f"field{field_num}")
+            if value is not None:
+                rows.append({
+                    "Time": item["created_at"],
+                    "Sensor Value": float(value)
+                })
+
+        return pd.DataFrame(rows)
+
+    except Exception:
+        return pd.DataFrame()
